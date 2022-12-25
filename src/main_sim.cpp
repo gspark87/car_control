@@ -9,6 +9,7 @@ using namespace std::chrono_literals;
 pure_pursuit pp;
 
 
+
 class simCon : public rclcpp::Node
 {
   private:
@@ -22,6 +23,7 @@ class simCon : public rclcpp::Node
       pub_ = this->create_publisher<geometry_msgs::msg::Vector3>("param_ctl", 10);
       timer_ = this->create_wall_timer(20ms, std::bind(&simCon::timer_callback, this)); // HW test >> 100ms
 
+      // Pre-defined Path
       int N=10;
       double cx[N+1] = {0, };
       double cy[N+1] = {0, };
@@ -64,23 +66,37 @@ class simCon : public rclcpp::Node
       pp.traj.resize(N+1,3);
       for(int i=0; i<N+1; i++) {
         pp.traj(i,0) = i;
-        pp.traj(i,2) = cx[i];
-        pp.traj(i,1) = cy[i];
-        //std::cout << i <<", "<< cx[i] <<", " << cy[i] << std::endl;
+        pp.traj(i,1) = cx[i];
+        pp.traj(i,2) = cy[i];
+        // std::cout << i <<", "<< cx[i] <<", " << cy[i] << std::endl;
       }
     }
 
     int cnt = 0;
     double dt = 0.1;         // [s] time tick
     double WB = 0.3;         // [m] wheel base of vehicle
-
+    double lf = 0.5;         // [m] distance from front wheel to CoG
+    double tx, ty, alpha;
+  
     void timer_callback() {
 
-      if (cnt > 50) {
+      if (cnt > 20) {
         pp.controlVehicleSpeed();  // PID Control
         if (!pp.checkGoal())
           pp.search_targetCourse_index();
-        pp.calSteeringAngle();
+        // Pure pursuit calSteeringAngle
+        if (pp.Idx < pp.traj.rows()) {
+          tx = pp.traj(pp.Idx,1);  // North
+          ty = pp.traj(pp.Idx,2);  // East
+        }
+        else {
+    	    pp.Idx = pp.traj.rows()-1;
+          tx = pp.traj(pp.Idx,1);  // North
+          ty = pp.traj(pp.Idx,2);  // East
+        }
+
+        alpha = atan2(tx-pp.x_pos(0), ty-pp.x_pos(1)) - pp.x_yaw;  // main.cpp
+        pp.delta = atan2(2 * WB * sin(alpha) / lf, 1.0);
       }
       else {
         pp.delta = 0;
@@ -92,16 +108,17 @@ class simCon : public rclcpp::Node
       pp.x_pos(0) = pp.x_pos(0) + pp.x_vel*sin(pp.x_yaw)*dt;
       pp.x_pos(1) = pp.x_pos(1) + pp.x_vel*cos(pp.x_yaw)*dt;
       pp.x_yaw = pp.x_yaw + pp.x_vel / WB * tan(pp.delta) * dt;
-      pp.x_vel = pp.targetSpeed; //pp.ai * dt;
+      pp.x_vel = pp.targetSpeed;
 
-        //std::cout<<cnt<<", "<< pp.Idx<<", "<<pp.x_pos(0)<<", "<<pp.x_pos(1)<<", "<<pp.x_yaw<<", "<<pp.x_vel<<std::endl;
-        //std::cout<<cnt<<", "<< pp.Idx<<", "<<pp.x_pos(0)<<", "<<pp.x_pos(1)<<", "<<pp.ai<<", "<<pp.delta*(180/M_PI)<<std::endl;
-        //std::cout<<pp.checkGoal() <<", "<<cnt<<", "<< pp.Idx<<", "<<pp.x_pos(0)<<", "<<pp.x_pos(1)<<", "<<pp.x_yaw<<", "<<pp.x_vel<< ", "<<  std::endl;
+      std::cout<<cnt<<", "<< pp.Idx<<", "<<pp.x_pos(0)<<", "<<pp.x_pos(1)<<", "<<pp.x_yaw<<", "<<pp.x_vel<<", "<< pp.ai<<", "<< pp.delta <<std::endl;
 
-        //RCLCPP_INFO(this->get_logger(), "%d : simulation end", cnt);
+      if (pp.checkGoal()) // Arrival at Goal
+      {
+          RCLCPP_INFO(this->get_logger(), "%d : End Simulation", cnt);
+          rclcpp::shutdown();
+      }
       cnt += 1;
     }
-
 };
 
 int main(int argc, char * argv[])
