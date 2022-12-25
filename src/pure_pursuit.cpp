@@ -40,7 +40,7 @@ void pure_pursuit::state_update(const navigation_interfaces::msg::NavState::Shar
     x_vel = sqrt( pow(Xstate->velocity.x,2) + pow(Xstate->velocity.y,2) );
 
     quat.w() = Xstate->quaternion.w;
-    quat.vec() << Xstate->quaternion.x, Xstate->quaternion.y, Xstate->quaternion.z;  // !!! must check
+    quat.vec() << Xstate->quaternion.x, Xstate->quaternion.y, Xstate->quaternion.z;
     x_att = Quat2Euler(quat);
     x_yaw = x_att(2);
 
